@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ticket-Verkauf</title>
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+  <style>
+    * { box-sizing: border-box; }
+
+    body {
+      font-family: Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #f4f4f4;
+    }
+
+    #loginForm, #hauptbereich, #ticketFormular, #geldBereich {
+      display: none;
+      margin-bottom: 20px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: #fff;
+      margin-top: 20px;
+    }
+
+    th, td {
+      padding: 10px;
+      border: 1px solid #ccc;
+      text-align: left;
+    }
+
+    .adminOnly {
+      display: none;
+    }
+
+    #buttonLeiste {
+      margin-bottom: 30px;
+    }
+
+    #logo {
+      width: 200px;
+      margin-bottom: 20px;
+    }
+
+    button {
+      background-color: #007bff;
+      color: white;
+      padding: 10px 15px;
+      border: none;
+      border-radius: 5px;
+      cursor: pointer;
+      margin-right: 10px;
+    }
+
+    button:hover {
+      background-color: #0056b3;
+    }
+
+    input, select {
+      padding: 8px;
+      margin: 5px;
+      border-radius: 4px;
+      border: 1px solid #ccc;
+    }
+
+    canvas {
+      margin-top: 10px;
+    }
+
+    @media (max-width: 600px) {
+      table, thead, tbody, th, td, tr {
+        display: block;
+      }
+
+      td {
+        padding: 10px;
+        border: none;
+        border-bottom: 1px solid #ccc;
+      }
+    }
+  </style>
+</head>
+<body>
+
+<img id="logo" src="https://www.nordwestmecklenburg.de/de/datei/anzeigen/id/21225,1105/gsg-logo-cmyk.jpg" alt="GSG Logo">
+
+<h1>Ticket Verkauf</h1>
+
+<div id="loginForm">
+  <label>Benutzername: <input type="text" id="username"></label>
+  <label>Passwort: <input type="password" id="password"></label>
+  <button onclick="einloggen()">Einloggen</button>
+</div>
+
+<div id="hauptbereich">
+  <div id="buttonLeiste">
+    <button onclick="zeigeTicketFormular()">Ticket Kaufen</button>
+    <button onclick="zeigeGeldBereich()">Geld Stand</button>
+  </div>
+</div>
+
+<div id="ticketFormular">
+  <form onsubmit="hinzufuegen(event)">
+    <label>Vorname: <input type="text" id="vorname"></label>
+    <label>Zuname: <input type="text" id="nachname"></label>
+    <label>Tickets:
+      <select id="anzahl">
+        <option>1</option>
+        <option>2</option>
+        <option>3</option>
+        <option>4</option>
+      </select>
+    </label>
+    <button type="submit">Hinzufügen</button>
+  </form>
+  <p id="ticketAnzeige"></p>
+  <table>
+    <thead>
+      <tr><th>Vorname</th><th>Zuname</th><th>Tickets</th><th class="adminOnly">Aktion</th></tr>
+    </thead>
+    <tbody id="tabelleBody"></tbody>
+  </table>
+</div>
+
+<div id="geldBereich">
+  <div style="display: flex; flex-wrap: wrap; gap: 20px;">
+    <canvas id="geldDiagramm" width="300" height="300"></canvas>
+  </div>
+  <div class="adminOnly">
+    <label>Betrag hinzufügen (€): <input type="number" id="geldInput"></label>
+    <button id="geldHinzufuegenBtn">Hinzufügen</button><br><br>
+    <label>Betrag abziehen (€): <input type="number" id="geldAbziehenInput"></label>
+    <button id="geldAbziehenBtn">Abziehen</button>
+  </div>
+
+  <!-- Neue Klassenübersicht als Listen -->
+  <div id="klassenListenBereich" class="adminOnly" style="display:none; margin-top: 20px;">
+    <h3>Geldübersicht nach Klassen</h3>
+    <div id="klassenListenContainer"></div>
+  </div>
+</div>
+
+<button id="speichernBtn" style="display:none">Daten speichern</button>
+
+<script>
+let ticketDaten = JSON.parse(localStorage.getItem("ticketDaten")) || {};
+let freieTickets = parseInt(localStorage.getItem("freieTickets")) || 200;
+let aktuellGeld = parseInt(localStorage.getItem("aktuellGeld")) || 0;
+const zielSumme = 50000;
+let rolle = "gast";
+let klassenGeld = JSON.parse(localStorage.getItem("klassenGeld")) || {
+  Jahrgang: 0,
+  A: 0,
+  B: 0,
+  C: 0,
+  D: 0
+};
+
+const loginForm = document.getElementById("loginForm");
+const hauptbereich = document.getElementById("hauptbereich");
+const ticketFormular = document.getElementById("ticketFormular");
+const geldBereich = document.getElementById("geldBereich");
+const ticketAnzeige = document.getElementById("ticketAnzeige");
+const tabelleBody = document.getElementById("tabelleBody");
+const geldInput = document.getElementById("geldInput");
+const geldHinzufuegenBtn = document.getElementById("geldHinzufuegenBtn");
+const speichernBtn = document.getElementById("speichernBtn");
+const geldAbziehenInput = document.getElementById("geldAbziehenInput");
+const geldAbziehenBtn = document.getElementById("geldAbziehenBtn");
+
+const geldDiagramm = new Chart(document.getElementById("geldDiagramm"), {
+  type: "doughnut",
+  data: {
+    labels: ["Gesammelt", "Fehlend"],
+    datasets: [{ data: [aktuellGeld, zielSumme - aktuellGeld], backgroundColor: ["green", "gray"] }]
+  },
+  options: { responsive: false }
+});
+
+loginForm.style.display = "block";
+
+function einloggen() {
+  const user = document.getElementById("username").value;
+  const pw = document.getElementById("password").value;
+  if ((user === "AbiGSG26" && pw === "2026") ||
+      (user === "Isoldepopko" && pw === "02052008") ||
+      (user === "bernd117" && pw === "&florian-0")) {
+    rolle = (user === "Isoldepopko" || user === "bernd117") ? "admin" : "user";
+    loginForm.style.display = "none";
+    hauptbereich.style.display = "block";
+    speichernBtn.style.display = "inline";
+    if (rolle === "admin") document.querySelectorAll(".adminOnly").forEach(el => el.style.display = "block");
+  } else {
+    alert("Falsche Login-Daten");
+  }
+}
+
+function zeigeTicketFormular() {
+  ticketFormular.style.display = "block";
+  geldBereich.style.display = "none";
+  document.getElementById("klassenListenBereich").style.display = "none";
+  aktualisiereTabelle();
+  aktualisiereTicketAnzeige();
+}
+
+function zeigeGeldBereich() {
+  ticketFormular.style.display = "none";
+  geldBereich.style.display = "block";
+  aktualisiereGeldDiagramm();
+  if (rolle === "admin") {
+    document.getElementById("klassenListenBereich").style.display = "block";
+    aktualisiereKlassenListen();
+  }
+}
+
+function hinzufuegen(e) {
+  e.preventDefault();
+  const vorname = document.getElementById("vorname").value.trim();
+  const nachname = document.getElementById("nachname").value.trim();
+  const tickets = parseInt(document.getElementById("anzahl").value);
+  if (!vorname || !nachname) return alert("Bitte alle Felder ausfüllen.");
+  if (tickets > freieTickets) return alert("Nicht genug freie Tickets.");
+  const key = vorname.toLowerCase() + "_" + nachname.toLowerCase();
+  if (ticketDaten[key]) {
+    const aktuelleTickets = ticketDaten[key].tickets;
+    if (aktuelleTickets + tickets > 4) return alert("Max. 4 Tickets pro Person erlaubt.");
+    ticketDaten[key].tickets += tickets;
+  } else {
+    ticketDaten[key] = { vorname, nachname, tickets };
+  }
+  freieTickets -= tickets;
+  aktuellGeld += tickets * 10;
+  aktualisiereTabelle();
+  aktualisiereTicketAnzeige();
+  aktualisiereGeldDiagramm();
+}
+
+function aktualisiereTabelle() {
+  tabelleBody.innerHTML = "";
+  for (const key in ticketDaten) {
+    const eintrag = ticketDaten[key];
+    const tr = document.createElement("tr");
+    tr.innerHTML = `<td>${eintrag.vorname}</td><td>${eintrag.nachname}</td><td>${eintrag.tickets}</td>`;
+    if (rolle === "admin") {
+      const td = document.createElement("td");
+      const btn = document.createElement("button");
+      btn.textContent = "Löschen";
+      btn.onclick = () => {
+        freieTickets += eintrag.tickets;
+        delete ticketDaten[key];
+        aktualisiereTabelle();
+        aktualisiereTicketAnzeige();
+        aktualisiereGeldDiagramm();
+      };
+      td.appendChild(btn);
+      tr.appendChild(td);
+    }
+    tabelleBody.appendChild(tr);
+  }
+}
+
+function aktualisiereTicketAnzeige() {
+  ticketAnzeige.textContent = `Es gibt ${freieTickets} freie Tickets.`;
+}
+
+function aktualisiereGeldDiagramm() {
+  const rest = Math.max(zielSumme - aktuellGeld, 0);
+  const gesammelt = aktuellGeld > zielSumme ? zielSumme : aktuellGeld;
+  geldDiagramm.data.datasets[0].data = [gesammelt, rest];
+  geldDiagramm.update();
+}
+
+geldHinzufuegenBtn.onclick = () => {
+  const betrag = parseInt(geldInput.value);
+  if (isNaN(betrag) || betrag <= 0) return alert("Gültigen Betrag eingeben");
+  aktuellGeld += betrag;
+  geldInput.value = "";
+  aktualisiereGeldDiagramm();
+  aktualisiereKlassenListen(); // Falls nötig
+};
+
+geldAbziehenBtn.onclick = () => {
+  const betrag = parseInt(geldAbziehenInput.value);
+  if (isNaN(betrag) || betrag <= 0) return alert("Gültigen Betrag eingeben");
+  if (betrag > aktuellGeld) return alert("Nicht genügend Guthaben");
+  aktuellGeld -= betrag;
+  geldAbziehenInput.value = "";
+  aktualisiereGeldDiagramm();
+  aktualisiereKlassenListen(); // Falls nötig
+};
+speichernBtn.onclick = () => {
+  localStorage.setItem("ticketDaten", JSON.stringify(ticketDaten));
+  localStorage.setItem("freieTickets", freieTickets);
+  localStorage.setItem("aktuellGeld", aktuellGeld);
+  localStorage.setItem("klassenGeld", JSON.stringify(klassenGeld));
+  alert("Daten gespeichert.");
+};
+
+function aktualisiereKlassenListen() {
+  const container = document.getElementById("klassenListenContainer");
+  container.innerHTML = "";
+
+  for (const klasse in klassenGeld) {
+    const wrapper = document.createElement("div");
+    wrapper.style.marginBottom = "15px";
+    wrapper.style.background = "#fff";
+    wrapper.style.padding = "10px";
+    wrapper.style.borderRadius = "8px";
+    wrapper.style.boxShadow = "0 0 5px rgba(0,0,0,0.1)";
+
+    const titel = document.createElement("h4");
+    titel.textContent = `Klasse: ${klasse}`;
+
+    const betragInput = document.createElement("input");
+    betragInput.type = "number";
+    betragInput.value = klassenGeld[klasse];
+    betragInput.onchange = () => {
+      klassenGeld[klasse] = parseInt(betragInput.value) || 0;
+    };
+    betragInput.style.marginRight = "10px";
+
+    const speichernBtn = document.createElement("button");
+    speichernBtn.textContent = "Speichern";
+    speichernBtn.onclick = () => {
+      localStorage.setItem("klassenGeld", JSON.stringify(klassenGeld));
+      alert("Wert gespeichert.");
+    };
+
+    wrapper.appendChild(titel);
+    wrapper.appendChild(betragInput);
+    wrapper.appendChild(speichernBtn);
+    container.appendChild(wrapper);
+  }
+}
+</script>
+
+</body>
+</html>
