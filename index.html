@@ -186,10 +186,15 @@ loginForm.style.display = "block";
 function einloggen() {
   const user = document.getElementById("username").value;
   const pw = document.getElementById("password").value;
-  if ((user === "AbiGSG26" && pw === "2026") ||
-      (user === "Isoldepopko" && pw === "02052008") ||
-      (user === "bernd117" && pw === "&florian-0")) {
-    rolle = (user === "Isoldepopko" || user === "bernd117") ? "admin" : "user";
+  if (
+  (user === "Fabianreichelt" && pw === "Jettlover") ||
+  (user === "Hardymelde" && pw === "DerChemiker") ||
+  (user === "Johannesnapierski" && pw === "Sportlernummereins") ||
+  (user === "Isoldepopko" && pw === "02052008") ||
+  (user === "bernd117" && pw === "&florian-0")
+) {
+  rolle = (user === "Isoldepopko" || user === "bernd117") ? "admin" : "user";
+
     loginForm.style.display = "none";
     hauptbereich.style.display = "block";
     speichernBtn.style.display = "inline";
